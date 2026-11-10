@@ -1,0 +1,489 @@
+/*iPhone のホーム画面から開いたとき（PWA）：画面の切り欠き・ホームバーに重ならないようにする*/
+body{
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/*画面の切り替え*/
+.app-nav{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 8px 15px;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 16px;
+  position: sticky;            /* スクロールしても上に残す */
+  top: 0;
+  z-index: 1020;
+  background-color: #fff;
+}
+
+.app-title{
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-right: 16px;
+}
+
+.app-nav .nav-link{
+  padding: 4px 14px;
+  color: #6c757d;              /* Bootstrap の Secondary */
+}
+
+.app-nav .nav-link.active{
+  color: #fff;
+  background-color: #6c757d;
+}
+
+/*テキスト*/
+#text_before_scramble{
+  font-size: 2vmin;
+}
+
+#text_scramble{
+  font-size: 8vmin;
+  text-decoration: underline 2px #FF0000;
+  text-underline-offset:0.1em;
+  margin-bottom: 6vmin;
+}
+
+#text_counter{
+    font-size: 25px;
+}
+
+
+
+#canvas{
+    margin-bottom: 8vmin;
+}
+
+#counters{
+  min-width:262px;
+  display: flex;
+  justify-content: center;
+  visibility: hidden;
+}
+
+
+
+/*ボタン*/
+#reset-counter{
+  margin-left: 10px;
+}
+
+#setting-button{
+  font-size:3vmin;
+}
+
+#state-button{
+  font-size:3vmin;
+}
+
+#training-button{
+  font-size:3vmin;
+
+}
+
+#weak-button{
+  font-size:3vmin;
+}
+
+/*苦手に記録したとき（0.3秒だけ）*/
+#weak-button.weak-added{
+  background-color: #dc3545;   /* Bootstrap の Danger */
+  border-color: #dc3545;
+  color: #fff;
+}
+
+/*苦手から外したとき（0.3秒だけ）*/
+#weak-button.weak-removed{
+  background-color: #235BC8;
+  border-color: #235BC8;
+  color: #fff;
+}
+
+.modal {
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+
+label, input[type='checkbox'] {
+    cursor: pointer;
+}
+
+
+
+/*tcllのチェックボックス関係*/
+.check-box{
+  background-color: #ABC88B;
+  cursor: pointer;
+  height: 80px;
+  width:150px;
+  border:solid 1px;
+  border-bottom-left-radius:3px;
+  border-bottom-right-radius:3px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  position: relative;
+}
+
+.check-box-title{
+  cursor: pointer;
+
+  background-color: #ABC88B;
+  width:150px;
+  border-top: solid 1px;
+  border-left: solid 1px;
+  border-right: solid 1px;
+  border-top-left-radius:3px;
+  border-top-right-radius:3px;
+}
+
+
+
+.check-text {
+  /*テキストボックスとテキストの上下を中央に*/
+  align-items: center;
+  display: flex;
+}
+
+.check-box input{
+  display: none; /* デフォルトのチェックボックスを非表示 */
+}
+
+
+#img-twist1-1{
+  background-image: url("./image/1.png");
+}
+
+#img-twist1-2{
+  background-image: url("./image/2.png");
+}
+
+#img-twist1-3{
+  background-image: url("./image/3.png");
+}
+
+#img-twist1-4{
+  background-image: url("./image/4.png");
+}
+
+#img-twist2-1{
+  background-image: url("./image/5.png");
+}
+
+#img-twist2-2{
+  background-image: url("./image/6.png");
+}
+
+#img-twist3-1{
+  background-image: url("./image/7.png");
+}
+
+#img-twist3-2{
+  background-image: url("./image/8.png");
+}
+
+#img-twist3-3{
+  background-image: url("./image/9.png");
+}
+
+#img-twist3-4{
+  background-image: url("./image/10.png");
+}
+
+#img-twist3-5{
+  background-image: url("./image/11.png");
+}
+
+#img-twist3-6{
+  background-image: url("./image/12.png");
+}
+
+#img-twist3-7{
+  background-image: url("./image/13.png");
+}
+
+#img-twist3-8{
+  background-image: url("./image/14.png");
+}
+
+#img-twist4-1{
+  background-image: url("./image/15.png");
+}
+
+#img-twist4-2{
+  background-image: url("./image/16.png");
+}
+
+#img-twist4-3{
+  background-image: url("./image/17.png");
+}
+
+#img-twist4-4{
+  background-image: url("./image/18.png");
+}
+
+
+
+
+
+
+
+
+/*センター選択画面*/
+.center-group {
+  border-bottom: 1px solid #dee2e6;
+  padding: 4px 0;
+}
+
+.center-summary {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;            /* 標準の三角を消す（下で自前の三角を表示） */
+}
+
+.center-summary::-webkit-details-marker {
+  display: none;               /* Safari 用：標準の三角を消す */
+}
+
+.center-summary input {
+  margin-right: 6px;
+}
+
+.center-toggle {
+  display: inline-block;
+  width: 1.2em;
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+details > .center-summary .center-toggle::before {
+  content: "▸";
+}
+
+details[open] > .center-summary .center-toggle::before {
+  content: "▾";
+}
+
+.center-group-count {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: #6c757d;
+}
+
+.center-patterns {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 4px 0 2px 2.2em;
+}
+
+.center-patterns label {
+  width: 50%;
+  margin: 0;
+}
+
+.center-patterns input {
+  margin-right: 4px;
+}
+
+.center-group-label {
+  display: flex;
+  align-items: center;
+  margin: 0;                   /* Bootstrap の label の下余白を消す */
+  cursor: pointer;
+}
+
+
+
+/*手順表*/
+/*手順表の上部（設定・表・コーナーのボタン）：スクロールしても画面の上に残す
+  top はタイトル（.app-nav）の高さ。main.js で --app-nav-h に入れる*/
+.alg-toolbar{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: -16px -15px 8px;
+  padding: 10px 9px 2px;
+  position: sticky;
+  top: var(--app-nav-h, 49px);
+  z-index: 1010;
+  background-color: #fff;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.alg-toolbar > *{
+  margin: 0 6px 8px;
+}
+
+/*コーナーのボタン：画面の幅に入りきらないときは改行する*/
+.alg-group-scroll{
+  max-width: 100%;
+}
+
+#alg-group-buttons{
+  flex-wrap: wrap;
+}
+
+#alg-group-buttons .btn{
+  white-space: nowrap;
+}
+
+/*手順表の設定画面*/
+.alg-setting-item{
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.alg-setting-item:last-child{
+  margin-bottom: 0;
+}
+
+.alg-setting-item > .btn{
+  flex: 0 0 8.5em;
+  margin-right: 10px;
+}
+
+.alg-setting-text{
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+
+/*ケースの一覧：幅に合わせて並べる数が変わるグリッド
+  1ケースの幅は、手順欄に「R' R' … R'」(R' × 20 = 59文字) が1行で収まる幅
+  （フルHD の画面幅で横に4ケース並ぶ大きさ）*/
+#alg-list{
+  --alg-chars: 59;            /* 1行に収める文字数 */
+  --alg-card-extra: 46px;     /* 文字以外の幅（行ラベル・余白・枠線） */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--alg-chars) * 1ch + var(--alg-card-extra))), 1fr));
+  grid-gap: 10px;
+  align-items: start;
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 11.5px;          /* 1ch の大きさ（手順欄の文字と同じ） */
+}
+
+/*1ケース分：上に状態、下に手順*/
+.alg-case{
+  min-width: 0;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.875rem;
+}
+
+.alg-state{
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.alg-figure{
+  position: relative;
+  flex: 0 0 auto;
+  margin-right: 10px;
+}
+
+.alg-state-info{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.alg-case-name{
+  font-weight: bold;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.alg-canvas{
+  display: block;
+}
+
+/*状態が未設定のときは枠だけ表示*/
+.alg-canvas-empty{
+  background-color: #f1f3f5;
+  border: 1px dashed #ced4da;
+  border-radius: 3px;
+}
+
+/*図の上に重ねるメッセージ（状態未設定など）*/
+.alg-state-msg{
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  font-size: 0.7rem;
+  color: #6c757d;
+  text-align: center;
+  pointer-events: none;
+}
+
+.alg-state-msg:empty{
+  display: none;
+}
+
+.alg-setup-text{
+  font-size: 0.75rem;
+  color: #6c757d;
+  word-break: break-word;
+}
+
+/*シートの手順と合わなかったケースなどの注記*/
+.alg-case-note{
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #c0392b;
+}
+
+/*下の手順（8行）*/
+.alg-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.alg-table th{
+  width: 24px;
+  padding: 3px 0;
+  text-align: center;
+  vertical-align: top;
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 11.5px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+}
+
+.alg-table td{
+  padding: 0;
+  border: 1px solid #dee2e6;
+}
+
+.alg-input{
+  display: block;
+  width: 100%;
+  min-height: 1.8em;
+  padding: 3px;
+  border: none;
+  resize: none;
+  overflow: hidden;
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 11.5px;          /* #alg-list と同じにする（1ch の幅を合わせるため） */
+  line-height: 1.4;
+}
+
+.alg-input:focus{
+  outline: 2px solid #80bdff;
+  outline-offset: -2px;
+}

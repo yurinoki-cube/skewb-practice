@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>Skewb練習</title>
+
+    <!-- ホーム画面に追加したとき、Safari の枠なしでアプリのように開く（PWA） -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Skewb練習">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="apple-touch-icon" href="image/icon-180.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.2.1/dist/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="main.css">
+  </head>
+  <body>
+
+    <!-- 画面の切り替え -->
+    <nav class="app-nav">
+      <span class="app-title">Skewb練習</span>
+      <ul class="nav nav-pills" id="view-tabs">
+        <li class="nav-item"><a class="nav-link active" href="#" data-view="trainer">TCLL Trainer</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-view="algsheet">手順表</a></li>
+      </ul>
+    </nav>
+
+    <div class="container-fluid">
+
+<!-- TCLLトレーナー -->
+      <div id="view-trainer">
+      <div class="row">
+        <div class="col-sm-12" id="touchArea">
+          <center>
+            <p id="text_before_scramble"></p>
+            <p id="text_scramble"></p>
+
+            <canvas id="canvas" width="220" height="300"></canvas><br>
+
+          </center>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-sm-12" >
+          <center>
+            <div id="counters">
+              <span id="text_counter"></span>
+              <button type="button" class="btn btn-outline-secondary" id="reset-counter" onclick="resetCounter()">Reset</button>
+            </div><br>
+
+            <button type="button" class="btn btn-outline-secondary" id="setting-button" data-toggle="modal" data-target="#modal1"><span class="bi bi-gear"></span></button>
+            <button type="button" class="btn btn-outline-secondary" id="state-button" data-toggle="modal" data-target="#modal-tcll"><span class="bi bi-box"></span></button>
+            <button type="button" class="btn btn-outline-secondary" id="training-button"><span class="bi bi-person-walking"></span></button>
+            <button type="button" class="btn btn-outline-secondary" id="weak-button"><span class="bi bi-cup-hot"></span></button>
+
+
+            <p hidden>スクランブル状態<br>
+            <input type="radio" name="state" value="tcll" checked>tcll<br>
+            </p><br>
+
+          </center>
+        </div>
+      </div>
+      </div>
+
+<!-- 手順表 -->
+      <div id="view-algsheet" hidden>
+        <div class="alg-toolbar" id="alg-toolbar">
+          <button type="button" class="btn btn-outline-secondary" id="alg-setting-button" data-toggle="modal" data-target="#modal-alg-setting" title="手順表の設定（読み込み・書き出し）"><span class="bi bi-gear"></span></button>
+
+          <div class="btn-group" role="group" id="alg-sheet-buttons">
+            <button type="button" class="btn btn-outline-secondary active" data-sheet="CLL">CLL</button>
+            <button type="button" class="btn btn-outline-secondary" data-sheet="EG2">EG2</button>
+            <button type="button" class="btn btn-outline-secondary" data-sheet="TCLL">TCLL</button>
+          </div>
+
+          <!-- コーナーの選択（CLL・EG2 は3つ、TCLL は18個のボタン） -->
+          <div class="alg-group-scroll">
+            <div class="btn-group" role="group" id="alg-group-buttons" aria-label="表示するコーナー"></div>
+          </div>
+        </div>
+
+        <div id="alg-list"></div>
+      </div>
+
+<!-- 手順表の設定画面（読み込み・書き出し） -->
+      <div class="modal fade" id="modal-alg-setting" tabindex="-1"
+            role="dialog" aria-labelledby="label-alg-setting" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label-alg-setting">手順表の設定</p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="alg-setting-item">
+                <label class="btn btn-outline-secondary btn-sm mb-0">
+                  <span class="bi bi-upload"></span> 読み込み
+                  <input type="file" id="alg-import-file" accept=".csv,.tsv,.txt,.json" hidden>
+                </label>
+                <span class="alg-setting-text">CSV / TSV / JSON から手順を一括で読み込む</span>
+              </div>
+              <div class="alg-setting-item">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportAlgCsv()"><span class="bi bi-filetype-csv"></span> CSV書き出し</button>
+                <span class="alg-setting-text">表示中の表を全ケース分書き出す（Excel などで編集して読み込める）</span>
+              </div>
+              <div class="alg-setting-item">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportAlgJson()"><span class="bi bi-filetype-json"></span> JSON書き出し</button>
+                <span class="alg-setting-text">すべての表をまとめて書き出す（バックアップ用）</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<!-- 設定画面 -->
+      <div class="modal fade" id="modal1" tabindex="-1"
+            role="dialog" aria-labelledby="label1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label1">設定</p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <center>
+                <div class="table-setting">
+                  <table>
+                    <tr>
+                      <td><label for="FL-Dface">
+                      <input type="checkbox" id="FL-Dface" checked>  First LayerをD面に表示する
+                      </label></td>
+                    </tr>
+                    <tr>
+                      <td><label for="counter">
+                      <input type="checkbox" id="counter" checked>  Counterを表示する
+                      </label></td>
+                    </tr>
+                  </table>
+                </div>
+              </center>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" onclick="resetSettingCheck()">Reset</button>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+<!-- TCLL画面 -->
+      <div class="modal fade" id="modal-tcll" tabindex="-1"
+            role="dialog" aria-labelledby="label-tcll" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label-tcll">TCLL選択画面</p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+
+
+              <div class="container-fluid">
+                <div class="row">
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist1-1" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(0)">1-1</div>
+                <label class="check-box" id="img-twist1-1" for="checkbox1">
+                  <input type="checkbox" id="checkbox1" name="twist" value="1" checked>
+                  <span class="check-text" id="text-twist1-1"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist1-2" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(1)">1-2</div>
+                <label class="check-box" id="img-twist1-2" for="checkbox2">
+                  <input type="checkbox" id="checkbox2" name="twist" value="2" checked>
+                  <span class="check-text" id="text-twist1-2"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist1-3" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(2)">1-3</div>
+                <label class="check-box" id="img-twist1-3" for="checkbox3">
+                  <input type="checkbox" id="checkbox3" name="twist" value="3" checked>
+                  <span class="check-text" id="text-twist1-3"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist1-4" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(3)">1-4</div>
+                <label class="check-box" id="img-twist1-4" for="checkbox4">
+                  <input type="checkbox" id="checkbox4" name="twist" value="4" checked>
+                  <span class="check-text" id="text-twist1-4"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist2-1" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(4)">2-1</div>
+                <label class="check-box" id="img-twist2-1" for="checkbox5">
+                  <input type="checkbox" id="checkbox5" name="twist" value="5" checked>
+                  <span class="check-text" id="text-twist2-1"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist2-2" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(5)">2-2</div>
+                <label class="check-box" id="img-twist2-2" for="checkbox6">
+                  <input type="checkbox" id="checkbox6" name="twist" value="6" checked>
+                  <span class="check-text" id="text-twist2-2"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-1" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(6)">3-1</div>
+                <label class="check-box" id="img-twist3-1" for="checkbox7">
+                  <input type="checkbox" id="checkbox7" name="twist" value="7" checked>
+                  <span class="check-text" id="text-twist3-1"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-2" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(7)">3-2</div>
+                <label class="check-box" id="img-twist3-2" for="checkbox8">
+                  <input type="checkbox" id="checkbox8" name="twist" value="8" checked>
+                  <span class="check-text" id="text-twist3-2"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-3" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(8)">3-3</div>
+                <label class="check-box" id="img-twist3-3" for="checkbox9">
+                  <input type="checkbox" id="checkbox9" name="twist" value="9" checked>
+                  <span class="check-text" id="text-twist3-3"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-4" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(9)">3-4</div>
+                <label class="check-box" id="img-twist3-4" for="checkbox10">
+                  <input type="checkbox" id="checkbox10" name="twist" value="10" checked>
+                  <span class="check-text" id="text-twist3-4"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-5" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(10)">3-5</div>
+                <label class="check-box" id="img-twist3-5" for="checkbox11">
+                  <input type="checkbox" id="checkbox11" name="twist" value="11" checked>
+                  <span class="check-text" id="text-twist3-5"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-6" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(11)">3-6</div>
+                <label class="check-box" id="img-twist3-6" for="checkbox12">
+                  <input type="checkbox" id="checkbox12" name="twist" value="12" checked>
+                  <span class="check-text" id="text-twist3-6"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-7" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(12)">3-7</div>
+                <label class="check-box" id="img-twist3-7" for="checkbox13">
+                  <input type="checkbox" id="checkbox13" name="twist" value="13" checked>
+                  <span class="check-text" id="text-twist3-7"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist3-8" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(13)">3-8</div>
+                <label class="check-box" id="img-twist3-8" for="checkbox14">
+                  <input type="checkbox" id="checkbox14" name="twist" value="14" checked>
+                  <span class="check-text" id="text-twist3-8"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist4-1" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(14)">4-1</div>
+                <label class="check-box" id="img-twist4-1" for="checkbox15">
+                  <input type="checkbox" id="checkbox15" name="twist" value="15" checked>
+                  <span class="check-text" id="text-twist4-1"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist4-2" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(15)">4-2</div>
+                <label class="check-box" id="img-twist4-2" for="checkbox16">
+                  <input type="checkbox" id="checkbox16" name="twist" value="16" checked>
+                  <span class="check-text" id="text-twist4-2"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist4-3" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(16)">4-3</div>
+                <label class="check-box" id="img-twist4-3" for="checkbox17">
+                  <input type="checkbox" id="checkbox17" name="twist" value="17" checked>
+                  <span class="check-text" id="text-twist4-3"></span>
+                </label>
+
+              </div>
+              <div class="col-auto">
+
+                <div class="check-box-title" id="title-twist4-4" data-toggle="modal" data-target="#modal-center" onclick="selectCenters(17)">4-4</div>
+                <label class="check-box" id="img-twist4-4" for="checkbox18">
+                  <input type="checkbox" id="checkbox18" name="twist" value="18" checked>
+                  <span class="check-text" id="text-twist4-4"></span>
+                </label>
+
+              </div>
+
+                  </div>
+                  </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(1)">Odd</button>
+              <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(2)">Even</button>
+              <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(3)">All</button>
+              <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(0)">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<!-- Center画面 -->
+      <div class="modal fade" id="modal-center" tabindex="-1"
+            role="dialog" aria-labelledby="label-center" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label-center">Center</p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+            <div id="center-list"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary"  onclick="setAllCenterChecks(true)">All</button>
+              <button type="button" class="btn btn-outline-secondary"  onclick="setAllCenterChecks(false)">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.6/dist/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.2.1/dist/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+
+    <script src="./date.js"></script>
+    <script src="./canvas.js"></script>
+    <script src="./solver.js"></script>
+    <script src="./scramble.js"></script>
+    <script src="./algsheet.js"></script>
+    <script src="./main.js"></script>
+
+
+  </body>
+</html>
