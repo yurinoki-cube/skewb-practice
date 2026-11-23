@@ -25,12 +25,14 @@
       <ul class="nav nav-pills" id="view-tabs">
         <li class="nav-item"><a class="nav-link active" href="#" data-view="trainer">TCLL Trainer</a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-view="algsheet">手順表</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-view="fl">FL一覧</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-view="fltrainer">FL Trainer</a></li>
       </ul>
     </nav>
 
     <div class="container-fluid">
 
-<!-- TCLLトレーナー -->
+<!-- TCLLトレーナー・FL Trainer（同じ画面を使い、表示する問題を切り替える） -->
       <div id="view-trainer">
       <div class="row">
         <div class="col-sm-12" id="touchArea">
@@ -38,9 +40,23 @@
             <p id="text_before_scramble"></p>
             <p id="text_scramble"></p>
 
-            <canvas id="canvas" width="220" height="300"></canvas><br>
+            <span id="tcll-canvas-slot"><canvas id="canvas" width="220" height="300"></canvas></span><br>
 
           </center>
+        </div>
+      </div>
+
+      <!-- FL Trainer：一面の手順と、一面を作る色のボタン（手順をタップすると、回したあとの LL の状態をモーダルで表示） -->
+      <div class="row">
+        <div class="col-sm-12">
+          <div id="flt-panel" hidden></div>
+        </div>
+      </div>
+
+      <!-- FL Trainer のキューブの状態（canvas を main.js でここに移す。タップ・スワイプは touchArea と同じ） -->
+      <div class="row">
+        <div class="col-sm-12" id="touchArea2" hidden>
+          <center id="flt-canvas-slot"></center>
         </div>
       </div>
 
@@ -53,7 +69,7 @@
             </div><br>
 
             <button type="button" class="btn btn-outline-secondary" id="setting-button" data-toggle="modal" data-target="#modal1"><span class="bi bi-gear"></span></button>
-            <button type="button" class="btn btn-outline-secondary" id="state-button" data-toggle="modal" data-target="#modal-tcll"><span class="bi bi-box"></span></button>
+            <button type="button" class="btn btn-outline-secondary" id="state-button" data-toggle="modal" data-target="#modal-tcll"><span class="bi bi-box"></span></button><!-- FL Trainer のときは #modal-fl-select を開く -->
             <button type="button" class="btn btn-outline-secondary" id="training-button"><span class="bi bi-person-walking"></span></button>
             <button type="button" class="btn btn-outline-secondary" id="weak-button"><span class="bi bi-cup-hot"></span></button>
 
@@ -85,6 +101,34 @@
         </div>
 
         <div id="alg-list"></div>
+      </div>
+
+<!-- FL一覧（一面の手順） -->
+      <div id="view-fl" hidden>
+        <div class="alg-toolbar" id="fl-toolbar">
+          <!-- パターンの選択（Triangle / Block / Arrow / Line / Done） -->
+          <div class="btn-group" role="group" id="fl-group-buttons" aria-label="表示するパターン"></div>
+        </div>
+
+        <div id="fl-list"></div>
+      </div>
+
+<!-- FL一覧の詳細画面（6手・7手、お気に入りの選択） -->
+      <div class="modal fade" id="modal-fl-detail" tabindex="-1"
+            role="dialog" aria-labelledby="label-fl-detail" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label-fl-detail">詳細</p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div id="fl-detail"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
 <!-- 手順表の設定画面（読み込み・書き出し） -->
@@ -140,8 +184,29 @@
                       </label></td>
                     </tr>
                     <tr>
+                      <td><label for="show-before">
+                      <input type="checkbox" id="show-before" checked>  前のスクランブルを表示する
+                      </label></td>
+                    </tr>
+                    <tr>
                       <td><label for="counter">
                       <input type="checkbox" id="counter" checked>  Counterを表示する
+                      </label></td>
+                    </tr>
+                    <!-- FL Trainer だけの設定 -->
+                    <tr class="flt-setting">
+                      <td><label for="flt-hide-corners">
+                      <input type="checkbox" id="flt-hide-corners">  LLコーナーを非表示にする
+                      </label></td>
+                    </tr>
+                    <tr class="flt-setting">
+                      <td><label for="flt-hide-centers">
+                      <input type="checkbox" id="flt-hide-centers">  LLセンターを非表示にする
+                      </label></td>
+                    </tr>
+                    <tr class="flt-setting">
+                      <td><label for="flt-exclude-done">
+                      <input type="checkbox" id="flt-exclude-done" checked>  Doneを除く
                       </label></td>
                     </tr>
                   </table>
@@ -344,6 +409,51 @@
               <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(2)">Even</button>
               <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(3)">All</button>
               <button type="button" class="btn btn-outline-secondary"  onclick="checkTCLL(0)">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<!-- FL Trainer：一面の手順を回したあとの LL の状態（CLL・EG2） -->
+      <div class="modal fade" id="modal-flt-result" tabindex="-1"
+            role="dialog" aria-labelledby="label-flt-result" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label-flt-result"></p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="flt-result" id="flt-result"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<!-- FL選択画面（FL Trainer で出題する FL一覧のパターン） -->
+      <div class="modal fade" id="modal-fl-select" tabindex="-1"
+            role="dialog" aria-labelledby="label-fl-select" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <p class="modal-title" id="label-fl-select">FL選択画面</p>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <!-- パターンの切り替え（Triangle / Block / Arrow / Line / Done。選択数も表示） -->
+              <div class="btn-group" role="group" id="flt-group-buttons" aria-label="表示するパターン"></div>
+              <div class="fl-none" id="flt-select-note" hidden>「Doneを除く」がオンのため、Done は選択できません（設定画面で変更できます）。</div>
+              <div id="flt-select-list"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" onclick="setFlSelectGroup(true)">All</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setFlSelectGroup(false)">Clear</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setFlSelectAll(true)">全部選択</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setFlSelectAll(false)">全部解除</button>
             </div>
           </div>
         </div>

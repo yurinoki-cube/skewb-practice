@@ -40,6 +40,12 @@ body{
   font-size: 2vmin;
 }
 
+/*前のスクランブルにも、そのときの FirstLayer の色で下線を引く*/
+.before-scramble{
+  text-decoration: underline 1px;
+  text-underline-offset: 0.15em;
+}
+
 #text_scramble{
   font-size: 8vmin;
   text-decoration: underline 2px #FF0000;
@@ -55,6 +61,16 @@ body{
 
 #canvas{
     margin-bottom: 8vmin;
+}
+
+/*FL Trainer：上から スクランブル → 手順の表 → 色のボタン → キューブの状態（キャンバスの高さは図に合わせる。scramble.js）*/
+#view-trainer.flt-mode #canvas{
+    margin-top: 6vmin;
+    margin-bottom: 8vmin;
+}
+
+#view-trainer.flt-mode #text_scramble{
+    margin-bottom: 4vmin;
 }
 
 #counters{
@@ -333,6 +349,87 @@ details[open] > .center-summary .center-toggle::before {
   white-space: nowrap;
 }
 
+/*FL一覧：ケースの一覧（1ケースに 完全一面・不完全一面 の2列）*/
+#fl-list{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(44ch + 70px)), 1fr));
+  grid-gap: 10px;
+  align-items: start;
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+}
+
+.fl-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.fl-table th{
+  padding: 3px 4px;
+  font-weight: bold;
+  font-size: 0.8rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+}
+
+.fl-count{
+  display: block;
+  font-weight: normal;
+  font-size: 0.7rem;
+  color: #6c757d;
+}
+
+.fl-table td{
+  padding: 2px 4px;
+  vertical-align: top;
+  border: 1px solid #dee2e6;
+}
+
+.fl-alg{
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+/*お気に入りのチェック*/
+.fl-fav{
+  flex: 0 0 auto;
+  margin: 0 5px 0 0;
+}
+
+.fl-alg-fav span{
+  font-weight: bold;
+}
+
+/*図をタップすると詳細画面*/
+.fl-figure{
+  cursor: pointer;
+}
+
+/*5手以下の手順がないとき*/
+.fl-none{
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+/*詳細画面*/
+#fl-detail .fl-table td{
+  padding: 2px 6px;
+}
+
+/*手数が変わるところに線を引く*/
+.fl-alg-next{
+  border-top: 1px dashed #ced4da;
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
 /*手順表の設定画面*/
 .alg-setting-item{
   display: flex;
@@ -486,4 +583,189 @@ details[open] > .center-summary .center-toggle::before {
 .alg-input:focus{
   outline: 2px solid #80bdff;
   outline-offset: -2px;
+}
+
+/*FL Trainer*/
+/*一面の手順の表（固定の大きさ）*/
+.flt-body{
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/*表の大きさは固定：1列 = 5手の手順（14文字）が入る幅、3行*/
+.flt-table{
+  width: calc(2 * (14ch + 14px));
+  table-layout: fixed;
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 14px;
+}
+
+.flt-table td{
+  width: 50%;
+}
+
+/*1行の高さをそろえる（手数の区切りの線も高さを変えない）*/
+.flt-alg, .flt-alg-empty{
+  height: 23px;
+  line-height: 22px;
+  margin: 0;
+  border-top: 1px dashed transparent;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.flt-alg.flt-alg-next{
+  border-top-color: #ced4da;
+}
+
+/*お気に入りの6手（17文字）・7手（20文字）は、文字を小さくして5手の幅に入れる*/
+.flt-alg.flt-alg-len6 span{
+  font-size: 0.82em;
+}
+
+.flt-alg.flt-alg-len7 span{
+  font-size: 0.7em;
+}
+
+.flt-alg-empty.fl-none{
+  font-size: 0.75rem;
+}
+
+.flt-table th{
+  text-align: center;
+}
+
+.flt-pattern-name{
+  background-color: #fff !important;
+}
+
+.flt-alg{
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+.flt-alg:hover{
+  background-color: #f1f3f5;
+}
+
+.flt-alg.active{
+  background-color: #ABC88B;
+}
+
+/*一面の手順を回したあとの LL の状態（モーダル）*/
+.flt-result{
+  text-align: center;
+}
+
+.flt-result canvas{
+  display: block;
+  margin: 0 auto 6px;
+}
+
+.flt-result-sheet{
+  font-weight: bold;
+}
+
+.flt-result-name{
+  word-break: break-word;
+}
+
+#label-flt-result{
+  font-family: SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-weight: bold;
+}
+
+/*一面を作る色のボタン（文字なし・色だけ）*/
+.flt-colors{
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.flt-color{
+  width: 34px;
+  height: 34px;
+  margin: 0 4px;
+  padding: 0;
+  border: 1px solid #6c757d;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.flt-color.active{
+  outline: 3px solid #343a40;
+  outline-offset: 2px;
+}
+
+.flt-open-detail{
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/*FL選択画面*/
+#flt-group-buttons{
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.flt-group-count{
+  font-size: 0.75rem;
+}
+
+#flt-select-list{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-gap: 6px;
+}
+
+.flt-tile{
+  border: 1px solid #000;
+  border-radius: 3px;
+  padding: 3px;
+  text-align: center;
+  cursor: pointer;
+  background-color: #FFFFFF;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.flt-tile.selected{
+  background-color: #ABC88B;
+}
+
+/*「Doneを除く」のときの Done（非選択で固定）*/
+.flt-tile.locked{
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+#flt-select-note{
+  margin-bottom: 6px;
+}
+
+.flt-tile canvas{
+  display: block;
+  margin: 0 auto;
+}
+
+.flt-tile-name{
+  font-size: 0.75rem;
+}
+
+/*スマホ：7手の手順2列が画面に入るように、文字を少し小さくする*/
+@media (max-width: 500px){
+  .flt-table th, .flt-table td{
+    padding: 2px 2px;
+  }
+  .flt-table{
+    font-size: 13px;
+  }
+  .flt-alg{
+    font-size: 13px;
+    padding: 0 2px;
+  }
 }

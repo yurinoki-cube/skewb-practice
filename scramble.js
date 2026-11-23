@@ -9,6 +9,72 @@ var ScrambleColor = [0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,5,5,5,5,5
 var CurrentTco;     //TCLLの番号（1〜18）
 var CurrentCenter;  //センターの番号（CENTER_CASES の番号）
 
+//表示しているスクランブルと、その前の2つ（右スワイプ・← キーで1回だけ戻せる）
+//  { text, color（下線の色）, colors（図の色）, tco, center, problem（苦手の記録用）, fl（FL Trainer のときの状態） }
+var CurrentScramble = null;
+var PrevScramble = null;    //1つ前（「前のスクランブル」に表示）
+var Prev2Scramble = null;   //2つ前（戻したときに「前のスクランブル」に表示）
+var CanBackScramble = false;
+
+//新しいスクランブルを表示する（今のものは「前のスクランブル」になる）
+function pushScramble(s) {
+  Prev2Scramble = PrevScramble;
+  PrevScramble = CurrentScramble;
+  CurrentScramble = s;
+  CanBackScramble = (PrevScramble !== null);
+  renderScramble();
+}
+
+//1つ前のスクランブルに戻す（直近1回だけ。戻したら「前のスクランブル」はその1つ前を表示）
+//戻せたら true
+function backScramble() {
+  if (!CanBackScramble || PrevScramble === null) return false;
+  CurrentScramble = PrevScramble;
+  PrevScramble = Prev2Scramble;
+  Prev2Scramble = null;
+  CanBackScramble = false;
+  renderScramble();
+  return true;
+}
+
+//スクランブルの文字・下線の色・図を表示する
+function renderScramble() {
+  var cur = CurrentScramble;
+  if (cur === null) return;
+
+  //前のスクランブル（設定で表示するときだけ。まだ無いときは「前のスクランブル : 」だけ表示）
+  var before = document.getElementById("text_before_scramble");
+  if (!document.getElementById("show-before").checked) {
+    before.innerHTML = "";
+  } else if (PrevScramble !== null) {
+    before.innerHTML = '前のスクランブル : <span class="before-scramble" style="text-decoration-color:'
+                     + PrevScramble.color + '">' + PrevScramble.text + '</span>';
+  } else {
+    before.innerHTML = "前のスクランブル : ";
+  }
+
+  document.getElementById("text_scramble").innerHTML = cur.text;
+  document.getElementById("text_scramble").style.textDecorationColor = cur.color;   //基準色
+
+  CurrentTco = cur.tco;
+  CurrentCenter = cur.center;
+  //FL Trainer は、キャンバスの高さを図に合わせる（図の下の空白を短くする）。TCLL は元の高さ（300）
+  var canvas = document.getElementById("canvas");
+  var height = cur.fl ? getSkewbCanvasSize(64).height : 300;
+  if (canvas.height !== height) canvas.height = height;
+
+  if (cur.fl) {
+    //FL Trainer：設定（First Layer を D 面・LL を非表示）に合わせて、表示するたびに色を作る
+    ScrambleColor = getFlTrainerColors(cur.fl);
+    DrawSkewbColors(64, document.getElementById("canvas"), ScrambleColor, FL_TRAINER_PALETTE);
+  } else {
+    ScrambleColor = cur.colors;
+    InitSkewbDrawer(64, document.getElementById("canvas"));
+  }
+
+  if (typeof renderFlTrainerPanel === "function") renderFlTrainerPanel(cur);   //FL Trainer の手順（main.js）
+}
+
 //スクランブル
 function ScrambleSkewb(state,corner,center){
 
@@ -38,19 +104,15 @@ function ScrambleSkewb(state,corner,center){
         ScrambleColor =sColor;
       }
 
-    //Text部分
-      var beforeText ="前のスクランブル : " +  document.getElementById("text_scramble").innerHTML;
-
-      //スクランブル変更
-      document.getElementById("text_before_scramble").innerHTML = beforeText;
-      document.getElementById("text_scramble").innerHTML = ScrambleText;
-
-      //基準色変更
-      document.getElementById("text_scramble").style.textDecorationColor = flcolorIF();
-
-    //図形部分
-      var cvs = document.getElementById("canvas");
-      InitSkewbDrawer(64, cvs);
+    //表示（今のスクランブルは「前のスクランブル」に回す）
+      pushScramble({
+        text: ScrambleText,        //スクランブル
+        color: flcolorIF(),        //下線の色（FirstLayer の色）
+        colors: ScrambleColor,     //図の色
+        tco: CurrentTco,           //苦手の記録用
+        center: CurrentCenter,
+        problem: { tcll: CurrentTco, center: CurrentCenter }
+      });
 
       break;
     default:
@@ -663,4 +725,305 @@ function rotateArrayLeft(arr, count) {
         arr.push(firstElement); // 取り出した要素を配列の最後に追加
     }
     return arr;
+}
+
+
+
+//FL Trainer 関係
+//  色の配列（30個）の色番号：0=白 1=緑 2=赤 3=青 4=オレンジ 5=黄（面の番号と同じ。U F R B L D）
+//  FL Trainer の状態は「FL 面 = F 面」の向き（FL一覧と同じ向き。r R B b で回せる）で作る
+
+//下線の色（色番号の順）
+var FL_TRAINER_HEX = ["#afadad", "#3FA877", "#DA4040", "#1E90FF", "#FFa500", "#FFEA00"];
+
+//持ち替え 24 通り（{ perm, seq }。回したあとの色[i] = 回す前の色[perm[i]]、seq は持ち替えの記号）
+var allCubeRotations = null;
+function getAllCubeRotations() {
+  if (allCubeRotations !== null) return allCubeRotations;
+  var id = [];
+  for (var i = 0; i < 30; i++) id.push(i);
+  var list = [{ perm: id, seq: [] }], seen = {};
+  seen[id.join()] = true;
+  for (var q = 0; q < list.length; q++) {
+    ["x", "y", "z"].forEach(function (r) {
+      var perm = rotateStateColor(list[q].perm, r);
+      if (seen[perm.join()]) return;
+      seen[perm.join()] = true;
+      list.push({ perm: perm, seq: list[q].seq.concat(r) });
+    });
+  }
+  allCubeRotations = list;
+  return list;
+}
+
+//色の付け替え 24 通り（持ち替えたときの色の入れ替わり方と同じ）  map[元の色] = 新しい色
+var allColorMaps = null;
+function getAllColorMaps() {
+  if (allColorMaps !== null) return allColorMaps;
+  allColorMaps = getAllCubeRotations().map(function (r) {
+    var map = [];
+    for (var f = 0; f < 6; f++) map[Math.floor(r.perm[5 * f] / 5)] = f;
+    return map;
+  });
+  return allColorMaps;
+}
+
+function permuteColors(col, perm) {
+  return perm.map(function (src) { return col[src]; });
+}
+
+function recolor(col, map) {
+  return col.map(function (c) { return map[c]; });
+}
+
+//r R B b の手順（FL_MOVE_NAMES の番号の配列）で色の配列を動かす
+function applyFlMoves(col, moves) {
+  moves.forEach(function (m) {
+    var perm = FL_MOVE_PERMS[FL_MOVE_NAMES[m].charAt(0)];
+    var times = (m % 2 === 1) ? 2 : 1;     //逆回し = 2回まわす
+    for (var t = 0; t < times; t++) col = permuteColors(col, perm);
+  });
+  return col;
+}
+
+//記号の文字列（"r R' B"）を FL_MOVE_NAMES の番号の配列にする
+function parseFlMoves(text) {
+  return String(text).trim().split(/\s+/).map(function (n) { return FL_MOVE_NAMES.indexOf(n); });
+}
+
+//色の配列から、solver.js でスクランブル（L R B U）を求める
+//  白・赤・緑のコーナーが UFR に来るように持ち替えた状態（= スクランブルを回した状態）を solver.js で解く
+//  戻り値 { alg: スクランブル（回転番号の配列）, colors: スクランブルを回した状態の色 }、解けなければ null
+function solveColorsForScramble(col) {
+  var rots = getAllCubeRotations();
+  for (var r = 0; r < rots.length; r++) {
+    var rc = permuteColors(col, rots[r].perm);
+    if (!(rc[4] === 0 && rc[11] === 2 && rc[7] === 1)) continue;
+
+    //solver.js の状態（センター・コーナーの番号）にする
+    var f = [], v = [];
+    for (var i = 0; i < 6; i++) {
+      f[i] = -1;
+      for (var k = 0; k < 6; k++) if (fMap[k] / 5 === rc[fMap[i]]) f[i] = k;
+      if (f[i] < 0) return null;
+    }
+    for (var i = 0; i < 8; i++) {
+      var sc = vMap[i].map(function (s) { return rc[s]; });
+      v[i] = null;
+      for (var k = 0; k < 8 && v[i] === null; k++) {
+        var home = vMap[k].map(function (s) { return Math.floor(s / 5); });
+        for (var o = 0; o < 3; o++) {
+          if (home.every(function (x, j) { return sc[(j + o) % 3] === x; })) { v[i] = [k, o]; break; }
+        }
+      }
+      if (v[i] === null) return null;
+    }
+
+    var tF = ConvF(f), tV = ConvV(v);
+    var f2 = [0, 1, 2, 3, 4, 5], v2 = [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0]];
+    ReconsF(f2, tF);
+    ReconsV(v2, tV);
+    if (!CompareState(f, v, f2, v2)) return null;    //作れない状態
+
+    var seq = [];
+    var n = Solve(tF, tV, seq, 4, 0, 11);
+    if (n < 1) return null;
+    var alg = getReverseAlg(seq[getRandomInt(0, n - 1)]);
+    if (getStateColor(alg).join() !== rc.join()) return null;   //念のため確認
+    return { alg: alg, colors: rc };
+  }
+  return null;
+}
+
+//CLL・EG2 の状態を見分けるための表
+//  一面を D 面にした色の配列を、D 面を軸にした持ち替え（y）と色の付け替えでそろえた文字列で比べる
+var llCaseIndex = null;
+
+function llCaseKey(col) {
+  var best = null;
+  var maps = getAllColorMaps().filter(function (m) { return m[col[25]] === 5; });   //一面の色を黄にする付け替え
+  var cur = col;
+  for (var k = 0; k < 4; k++) {
+    maps.forEach(function (m) {
+      var key = recolor(cur, m).join("");
+      if (best === null || key < best) best = key;
+    });
+    cur = rotateStateColor(cur, "y");
+  }
+  return best;
+}
+
+//別の面を一面として見たときの文字列（一面になる面が複数あるとき用。コーナーが全部揃っているときなど）
+//  D 面に持ってきたとき D 面の色がそろう向きの中で、いちばん小さい文字列
+function llCaseKeyAnyFace(col) {
+  var best = null;
+  getAllCubeRotations().forEach(function (r) {
+    var rc = permuteColors(col, r.perm);
+    if (![26, 27, 28, 29].every(function (i) { return rc[i] === rc[25]; })) return;
+    var key = llCaseKey(rc);
+    if (best === null || key < best) best = key;
+  });
+  return best;
+}
+
+function getLlCaseIndex() {
+  if (llCaseIndex !== null) return llCaseIndex;
+  llCaseIndex = { d: {}, any: {} };
+  var add = function (col, item) {
+    var key = llCaseKey(col);
+    if (llCaseIndex.d[key] === undefined) llCaseIndex.d[key] = item;
+    var key2 = llCaseKeyAnyFace(col);
+    if (llCaseIndex.any[key2] === undefined) llCaseIndex.any[key2] = item;
+  };
+  var solved = [];
+  for (var i = 0; i < 30; i++) solved.push(Math.floor(i / 5));
+  add(solved, { sheet: "", name: "完成" });
+  [["CLL", CLL_CASES], ["EG2", EG2_CASES]].forEach(function (s) {
+    s[1].forEach(function (c) {
+      add(rotateStateColor(getStateColor(parseScrambleText(c[2])), c[3]), { sheet: s[0], name: c[0] });
+    });
+  });
+  return llCaseIndex;
+}
+
+//一面を D 面にした状態が、どの CLL・EG2 か（見つからなければ null）
+//  まず D 面を一面として探し、無ければほかの面を一面として探す
+function findLlCase(colD) {
+  var index = getLlCaseIndex();
+  return index.d[llCaseKey(colD)] || index.any[llCaseKeyAnyFace(colD)] || null;
+}
+
+//一面が揃った状態（FL 面 = F 面）をランダムに作る（CLL のケースから選んで、F 面を軸にランダムに回す）
+function randomFlSolvedState() {
+  var n = getRandomInt(0, CLL_CASES.length);   //CLL_CASES.length のときは全部揃った状態
+  var col;
+  if (n === CLL_CASES.length) {
+    col = [];
+    for (var i = 0; i < 30; i++) col.push(Math.floor(i / 5));
+  } else {
+    var c = CLL_CASES[n];
+    col = rotateStateColor(getStateColor(parseScrambleText(c[2])), c[3] + " x");   //一面を D 面 → F 面
+  }
+  for (var k = getRandomInt(0, 3); k > 0; k--) col = rotateStateColor(col, "z");
+  return col;
+}
+
+//FL Trainer の問題を作る（p = FL一覧のパターン）
+//  戻り値 { colors: FL 面 = F 面の状態の色, scramble: { alg, colors }, flColor: 一面の色 }
+function buildFlTrainerState(p) {
+  for (var tries = 0; tries < 20; tries++) {
+    var col = applyFlMoves(randomFlSolvedState(), parseFlMoves(p.setup));
+    var maps = getAllColorMaps();
+    col = recolor(col, maps[getRandomInt(0, maps.length - 1)]);   //一面の色をランダムにする
+    var scr = solveColorsForScramble(col);
+    if (scr !== null) return { colors: col, scramble: scr, flColor: col[5] };
+  }
+  console.error("スクランブルが作れませんでした（" + p.name + "）");
+  return null;
+}
+
+//図の色（色番号の順）と、非表示の色（ライトグレー = 6 番）
+var FL_TRAINER_PALETTE = ["#FFFFFF", "#008000", "#FF0000", "#0F45FF", "#FFa500", "#FFFF00", "#D3D3D3"];
+
+//FL Trainer の問題を表示する（p = FL一覧のパターン）
+function ScrambleFlTrainer(p) {
+  var st = buildFlTrainerState(p);
+  if (st === null) return;
+  pushScramble({
+    text: getScrambleText(st.scramble.alg),
+    color: FL_TRAINER_HEX[st.flColor],     //下線の色（一面の色）
+    colors: null,                          //図の色は表示するときに作る
+    problem: { fl: p.name },
+    //selColor = 一面を作る色（色のボタンで変える。最初は出題したパターンの色）
+    fl: { pattern: p, colors: st.colors, scrambled: st.scramble.colors, flColor: st.flColor, selColor: st.flColor, views: [] }
+  });
+}
+
+//色ごとの一面（FL一覧のどのパターンか）
+//  見本 = FL一覧のセットアップを揃った状態から回した状態（一面の色 = 緑）
+//  一面の色のステッカーの位置（紺の見え方）で FL一覧のパターンを探し、その向き（FL一覧の図と同じ向き）にする
+var flSampleIndex = null;   //紺の見え方 → パターン
+
+function flNavyKey(colF, c) {
+  return colF.map(function (x) { return x === c ? 1 : 0; }).join("");
+}
+
+function getFlSampleIndex() {
+  if (flSampleIndex !== null) return flSampleIndex;
+  flSampleIndex = {};
+  var solved = [];
+  for (var i = 0; i < 30; i++) solved.push(Math.floor(i / 5));
+  getFlPatterns().forEach(function (list) {
+    list.forEach(function (p) {
+      var sample = applyFlMoves(solved, parseFlMoves(p.setup));
+      p.sample = sample;
+      flSampleIndex[flNavyKey(sample, 1)] = p;
+    });
+  });
+  return flSampleIndex;
+}
+
+//一面のコーナー（色 c を含むコーナー）のステッカーの位置
+function flPieceStickers(colF, c) {
+  var list = [];
+  vMap.forEach(function (corner) {
+    if (corner.some(function (s) { return colF[s] === c; })) list = list.concat(corner);
+  });
+  return list;
+}
+
+//色 c で一面を作るときの { color, pattern, colors（FL 面 = F 面の向きの色）, swapped }
+//  swapped = 一面のコーナーの並びが見本と対角で入れ替わっている（完全一面と不完全一面の手順が逆になる）
+function getFlView(fl, c) {
+  if (fl.views[c]) return fl.views[c];
+  var index = getFlSampleIndex();
+  var found = null;
+  getAllCubeRotations().forEach(function (r) {
+    if (found !== null && !found.swapped) return;
+    if (fl.colors[r.perm[5]] !== c) return;            //色 c のセンターを F 面に
+    var colF = permuteColors(fl.colors, r.perm);
+    var p = index[flNavyKey(colF, c)];
+    if (!p) return;
+    var stickers = flPieceStickers(colF, c);
+    var sampleType = getAllColorMaps().some(function (m) {
+      return m[c] === 1 && stickers.every(function (s) { return m[colF[s]] === p.sample[s]; });
+    });
+    if (found === null || sampleType) found = { color: c, pattern: p, colors: colF, swapped: !sampleType };
+  });
+  if (found === null) {
+    //FL一覧に無い = その色の一面はもう揃っている（完全一面か不完全一面）
+    var r0 = getAllCubeRotations().filter(function (r) { return fl.colors[r.perm[5]] === c; })[0];
+    found = { color: c, pattern: null, colors: permuteColors(fl.colors, r0.perm), swapped: false };
+  }
+  fl.views[c] = found;
+  return found;
+}
+
+//FL Trainer の図の色
+//  First Layer を D 面に表示する：FL一覧と同じ向き（一面を D 面にして、手順の r R B b がそのまま使える向き）
+//  表示しない：スクランブルを回したときの向き（白が上・緑が前の持ち方で回した状態）
+//  LL のコーナー（一面の色を含まないコーナー）・LL のセンター（一面以外のセンター）は、設定でライトグレーにする
+function getFlTrainerColors(fl) {
+  var view = getFlView(fl, fl.selColor);
+  var col = document.getElementById("FL-Dface").checked ? rotateStateColor(view.colors, "x'") : fl.scrambled.slice();
+  if (document.getElementById("flt-hide-corners").checked) {
+    vMap.forEach(function (c) {
+      if (!c.some(function (s) { return col[s] === fl.selColor; })) {
+        c.forEach(function (s) { col[s] = 6; });
+      }
+    });
+  }
+  if (document.getElementById("flt-hide-centers").checked) {
+    for (var f = 0; f < 6; f++) {
+      if (col[5 * f] !== fl.selColor) col[5 * f] = 6;
+    }
+  }
+  return col;
+}
+
+//手順（FL_MOVE_NAMES の番号の文字列）を回したあとの状態（一面を D 面）と、その CLL・EG2
+//（今選んでいる色の一面で回す）
+function getFlTrainerResult(fl, code) {
+  var col = rotateStateColor(applyFlMoves(getFlView(fl, fl.selColor).colors, code.split("").map(Number)), "x'");
+  return { colors: col, llCase: findLlCase(col) };
 }

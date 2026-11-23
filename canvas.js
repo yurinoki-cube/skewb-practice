@@ -33,10 +33,12 @@ function InitSkewbDrawer(width, cvs){
 
 //色の配列（30個）を指定して、展開図を描く
 //（手順表の小さい図など、トレーナー以外の canvas にも使う）
-function DrawSkewbColors(width, cvs, col){
+//palette を渡すと、色の配列の値を palette の色で塗る（FL一覧の紺・グレーの図など）
+function DrawSkewbColors(width, cvs, col, palette){
 	facewidth = width;
 	canvas = cvs;
 	SetColorScheme();
+	if (palette) colors = palette.slice();
 	colmap = col;
 	DrawFigure();
 }

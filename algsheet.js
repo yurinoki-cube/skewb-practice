@@ -589,3 +589,383 @@ document.getElementById("alg-import-file").addEventListener("change", function (
   };
   reader.readAsText(file, "utf-8");
 });
+
+
+
+//FL一覧（一面の手順）
+//  一面は FL 面（F 面）に作る。手順は r, r', R, R', B, B', b, b' の8種類
+//  パターンと5手以下の手順は date.js の FL_PATTERNS（前もって計算したもの）を使う
+//  左の列は完全一面、右の列は不完全一面（見本のセットアップで作った状態を基準にする）
+//  一覧には5手以下と、お気に入りにした6手・7手を表示する（お気に入りは太字）
+//  図をタップすると詳細画面を開き、6手・7手を計算して表示する。お気に入りは詳細画面で選ぶ
+var FL_FIGURE_WIDTH = 40;
+var FL_DETAIL_FIGURE_WIDTH = 60;
+var FL_FAV_STORAGE_KEY = "skewb-fl-favorites";
+var FL_FAV_VERSION_KEY = "skewb-fl-favorites-version";   //お気に入りの手順の向き（2 = Block を r' R' の向きにしたあと）
+var flGroup = 0;
+var flPatterns = null;                    //パターンの一覧（グループごと）
+var flFavorites = loadFlFavorites();      //お気に入り { "パターン名|列|手順": true }
+var flRenderToken = 0;
+var flEngine = null;                      //6手・7手を求めるための表（最初に詳細画面を開いたときに作る）
+var flDetail = null;                      //詳細画面で表示中のパターン
+
+function loadFlFavorites() {
+  var fav = {};
+  try {
+    fav = JSON.parse(localStorage.getItem(FL_FAV_STORAGE_KEY)) || {};
+    //Block の向きを変える前（データの版 1）のお気に入りを、新しい向きの手順に書き換える（R→r, B→R, b→B, r→b）
+    if (localStorage.getItem(FL_FAV_VERSION_KEY) !== "2") {
+      var map = { "0": 6, "2": 0, "4": 2, "6": 4 };
+      var moved = {};
+      Object.keys(fav).forEach(function (key) {
+        var k = key.split("|");
+        if (k[0].indexOf("Block ") === 0) {
+          k[2] = k[2].split("").map(function (c) { return map[c - (c % 2)] + (c % 2); }).join("");
+        }
+        moved[k.join("|")] = true;
+      });
+      fav = moved;
+      localStorage.setItem(FL_FAV_STORAGE_KEY, JSON.stringify(fav));
+      localStorage.setItem(FL_FAV_VERSION_KEY, "2");
+    }
+  } catch (e) {
+    //保存が使えない環境では空から始める
+  }
+  return fav;
+}
+
+function saveFlFavorites() {
+  try {
+    localStorage.setItem(FL_FAV_STORAGE_KEY, JSON.stringify(flFavorites));
+  } catch (e) {
+    //保存できなくても、このページを開いている間は使える
+  }
+}
+
+//FL_PATTERNS をグループごとの一覧にする
+//  cols[列] = { shortest: 最短手数, total: 載せる手順の数, algs: 5手以下の手順, extra: 6手・7手（計算したら入る） }
+function getFlPatterns() {
+  if (flPatterns !== null) return flPatterns;
+  flPatterns = FL_GROUP_NAMES.map(function () { return []; });
+  FL_PATTERNS.forEach(function (d) {
+    var list = flPatterns[d[0]];
+    list.push({
+      name: FL_GROUP_NAMES[d[0]] + " " + (list.length + 1),
+      group: d[0],
+      index: list.length,
+      setup: d[1],
+      cols: [d[2], d[3]].map(function (c) {
+        return { shortest: c[0], total: c[1], algs: c[2] === "" ? [] : c[2].split(" "), extra: null };
+      })
+    });
+  });
+  return flPatterns;
+}
+
+//手順（1手 = 1文字の番号）を記号の文字列にする
+function flAlgText(code) {
+  return code.split("").map(function (c) { return FL_MOVE_NAMES[Number(c)]; }).join(" ");
+}
+
+function flFavKey(p, col, code) {
+  return p.name + "|" + col + "|" + code;
+}
+
+function isFlFavorite(p, col, code) {
+  return !!flFavorites[flFavKey(p, col, code)];
+}
+
+//お気に入りにした6手・7手（保存されているキーから取り出す）
+function getFlFavoriteLong(p, col) {
+  var head = p.name + "|" + col + "|";
+  return Object.keys(flFavorites).filter(function (key) {
+    return key.indexOf(head) === 0 && key.length - head.length >= 6;
+  }).map(function (key) { return key.slice(head.length); })
+    .filter(function (code) { return /^[0-7]+$/.test(code); });   //壊れた記録は使わない
+}
+
+//見本の状態の色（一面の色 = 0、それ以外 = 1）。図は一面を D 面にして描く（持ち替え x'）
+function getFlPatternColors(p) {
+  var col = [];
+  for (var i = 0; i < 30; i++) col[i] = Math.floor(i / 5);
+  p.setup.split(" ").forEach(function (name) {
+    var perm = FL_MOVE_PERMS[name.charAt(0)];
+    var times = (name.length > 1) ? 2 : 1;    //逆回し = 2回まわす
+    for (var t = 0; t < times; t++) col = perm.map(function (src) { return col[src]; });
+  });
+  col = col.map(function (c) { return c === 1 ? 0 : 1; });
+  return rotateStateColor(col, "x'");
+}
+
+//手順の並び：手数の短い順、同じ手数の中はお気に入りが上（それ以外は元の順）
+function sortFlAlgs(p, col, codes) {
+  var items = codes.map(function (code, i) {
+    return { code: code, index: i, fav: isFlFavorite(p, col, code) };
+  });
+  items.sort(function (a, b) {
+    return (a.code.length - b.code.length) || ((b.fav ? 1 : 0) - (a.fav ? 1 : 0)) || (a.index - b.index);
+  });
+  return items;
+}
+
+//手順の並びの HTML（手数が変わるところに線、お気に入りは太字）
+//  withCheck: お気に入りのチェックを付ける（詳細画面）
+function flAlgListHtml(items, col, withCheck) {
+  var prev = 0;
+  return items.map(function (it) {
+    var cls = "fl-alg" + ((prev !== 0 && it.code.length !== prev) ? " fl-alg-next" : "") + (it.fav ? " fl-alg-fav" : "");
+    prev = it.code.length;
+    var text = '<span>' + escapeHtml(flAlgText(it.code)) + '</span>';
+    if (!withCheck) return '<div class="' + cls + '">' + text + '</div>';
+    return '<label class="' + cls + '">'
+         +   '<input type="checkbox" class="fl-fav" data-col="' + col + '" data-code="' + it.code + '"' + (it.fav ? ' checked' : '') + ' title="お気に入り">'
+         +   text
+         + '</label>';
+  }).join("");
+}
+
+//一覧の1パターン分の手順（5手以下 ＋ お気に入りにした6手・7手）
+function flTableBodyHtml(p) {
+  return '<tr>' + [0, 1].map(function (col) {
+    var codes = p.cols[col].algs.concat(getFlFavoriteLong(p, col));
+    if (codes.length === 0) {
+      return '<td><div class="fl-none">' + p.cols[col].shortest + '手（図をタップ）</div></td>';
+    }
+    return '<td>' + flAlgListHtml(sortFlAlgs(p, col, codes), col, false) + '</td>';
+  }).join("") + '</tr>';
+}
+
+//列の見出し
+function flHeadHtml(p) {
+  return ["完全一面", "不完全一面"].map(function (label, c) {
+    return '<th>' + label + '<span class="fl-count">最短' + p.cols[c].shortest + '手・' + p.cols[c].total + '通り</span></th>';
+  }).join("");
+}
+
+//FL一覧を表示する（グループの切り替え時にも呼ぶ）
+function renderFlSheet() {
+  var groups = getFlPatterns();
+
+  document.getElementById("fl-group-buttons").innerHTML = FL_GROUP_NAMES.map(function (name, g) {
+    return '<button type="button" class="btn btn-outline-secondary' + (g === flGroup ? ' active' : '') + '"'
+         + ' data-group="' + g + '">' + escapeHtml(name) + '</button>';
+  }).join("");
+
+  var cvsSize = getSkewbCanvasSize(FL_FIGURE_WIDTH);
+  var list = groups[flGroup];
+
+  document.getElementById("fl-list").innerHTML = list.map(function (p, n) {
+    return '<div class="alg-case fl-case" data-index="' + n + '">'
+         +   '<div class="alg-state">'
+         +     '<div class="alg-figure fl-figure" title="タップで詳細（6手・7手）">'
+         +       '<canvas class="alg-canvas" width="' + cvsSize.width + '" height="' + cvsSize.height + '"></canvas>'
+         +     '</div>'
+         +     '<div class="alg-state-info">'
+         +       '<div class="alg-case-name">' + escapeHtml(p.name) + '</div>'
+         +       '<div class="alg-setup-text">セットアップ: ' + escapeHtml(p.setup) + '</div>'
+         +     '</div>'
+         +   '</div>'
+         +   '<table class="fl-table"><thead><tr>' + flHeadHtml(p) + '</tr></thead><tbody>' + flTableBodyHtml(p) + '</tbody></table>'
+         + '</div>';
+  }).join("");
+
+  //図を少しずつ描く
+  var token = ++flRenderToken;
+  var items = Array.prototype.slice.call(document.querySelectorAll("#fl-list .fl-case"));
+  var i = 0;
+  (function step() {
+    if (token !== flRenderToken) return;
+    var start = Date.now();
+    while (i < items.length && Date.now() - start < 30) {
+      var p = list[Number(items[i].dataset.index)];
+      DrawSkewbColors(FL_FIGURE_WIDTH, items[i].querySelector(".alg-canvas"), getFlPatternColors(p), FL_PALETTE);
+      i++;
+    }
+    if (i < items.length) setTimeout(step, 0);
+  })();
+}
+
+//パターン（Triangle / Block / Arrow / Line / Done）の切り替え
+document.getElementById("fl-group-buttons").addEventListener("click", function (e) {
+  var b = e.target.closest("button");
+  if (b === null) return;
+  flGroup = Number(b.dataset.group);
+  renderFlSheet();
+  window.scrollTo(0, 0);
+  b.blur();
+});
+
+//図をタップ → 詳細画面
+document.getElementById("fl-list").addEventListener("click", function (e) {
+  var fig = e.target.closest(".fl-figure");
+  if (fig === null) return;
+  var p = getFlPatterns()[flGroup][Number(fig.closest(".fl-case").dataset.index)];
+  openFlDetail(p);
+});
+
+
+
+//6手・7手の計算
+//  FL 面の4つのコーナーのステッカー（12枚）の位置を状態として、全部（11664通り）たどった表を作る
+function getFlEngine() {
+  if (flEngine !== null) return flEngine;
+
+  var moves = [];   //FL_MOVE_NAMES の順（r r' R R' B B' b b'）。to[今の位置] = 回したあとの位置
+  ["r", "R", "B", "b"].forEach(function (name) {
+    var p = FL_MOVE_PERMS[name];
+    var p2 = p.map(function (src) { return p[src]; });   //2回まわす = 逆回し
+    [p, p2].forEach(function (perm) {
+      var to = [];
+      perm.forEach(function (src, dest) { to[src] = dest; });
+      moves.push(to);
+    });
+  });
+
+  //FL 面のコーナーのステッカー
+  var stickers = [];
+  vMap.forEach(function (c) {
+    if (c.some(function (s) { return Math.floor(s / 5) === 1; })) stickers.push.apply(stickers, c);
+  });
+  var navyJ = [];          //一面の色のステッカー（stickers の中の番号）
+  stickers.forEach(function (s, j) { if (Math.floor(s / 5) === 1) navyJ.push(j); });
+  var sidePairs = {};      //一面が揃ったとき、側面に並ぶ2枚の位置
+  stickers.forEach(function (s) {
+    var f = Math.floor(s / 5);
+    if (f !== 1) (sidePairs[f] = sidePairs[f] || []).push(s);
+  });
+
+  //全状態（0 番が揃った状態）
+  var states = [stickers.slice()], index = {};
+  index[states[0].join()] = 0;
+  var trans = moves.map(function () { return []; });
+  for (var i = 0; i < states.length; i++) {
+    moves.forEach(function (to, k) {
+      var ns = states[i].map(function (pos) { return to[pos]; });
+      var key = ns.join();
+      if (index[key] === undefined) { index[key] = states.length; states.push(ns); }
+      trans[k][i] = index[key];
+    });
+  }
+
+  //揃っているか：0 = 揃っていない、1 = 完全一面、2 = 不完全一面
+  var type = states.map(function (st) {
+    if (!navyJ.every(function (j) { return Math.floor(st[j] / 5) === 1; })) return 0;
+    var at = {};
+    st.forEach(function (pos, j) { at[pos] = stickers[j]; });
+    var complete = Object.keys(sidePairs).every(function (f) {
+      var p = sidePairs[f];
+      return Math.floor(at[p[0]] / 5) === Math.floor(at[p[1]] / 5);
+    });
+    return complete ? 1 : 2;
+  });
+
+  //揃うまでの最短手数
+  function distances(target) {
+    var d = type.map(function (t) { return t === target ? 0 : -1; });
+    var queue = [];
+    d.forEach(function (x, i) { if (x === 0) queue.push(i); });
+    for (var q = 0; q < queue.length; q++) {
+      var i = queue[q];
+      for (var k = 0; k < trans.length; k++) {
+        var j = trans[k][i];
+        if (d[j] < 0) { d[j] = d[i] + 1; queue.push(j); }
+      }
+    }
+    return d;
+  }
+
+  flEngine = { trans: trans, type: type, dist: [null, distances(1), distances(2)] };
+  return flEngine;
+}
+
+//載せる手数の上限（5手以下はすべて。最短5手なら6手、6手なら7手、7手なら7手。5手以下が1手順だけなら6手まで）
+function getFlLimit(c) {
+  if (c.shortest <= 4) return c.algs.length === 1 ? 6 : 5;
+  return Math.min(c.shortest + 1, 7);
+}
+
+//パターン p の列 col の、6手以上の手順を求める（同じ角を続けて回さない・途中で揃う手順は除く）
+function findFlLongAlgs(p, col) {
+  var c = p.cols[col];
+  if (c.extra !== null) return c.extra;
+
+  var e = getFlEngine();
+  var target = col + 1, d = e.dist[target];
+  var s = 0;
+  p.setup.split(" ").forEach(function (name) { s = e.trans[FL_MOVE_NAMES.indexOf(name)][s]; });
+
+  var limit = getFlLimit(c);
+  var found = [], seq = [];
+  (function search(cur, last, depth) {
+    if (depth > 0 && e.type[cur] === target) {
+      if (depth >= 6) found.push(seq.join(""));
+      return;
+    }
+    if (depth === limit) return;
+    for (var m = 0; m < 8; m++) {
+      if (last >= 0 && (m >> 1) === (last >> 1)) continue;   //同じ角を続けて回さない
+      var next = e.trans[m][cur];
+      if (d[next] > limit - depth - 1) continue;              //残りの手数では揃わない
+      seq.push(m);
+      search(next, m, depth + 1);
+      seq.pop();
+    }
+  })(s, -1, 0);
+
+  found.sort(function (a, b) { return a.length - b.length; });   //同じ手数の中は記号の順（探した順）
+  c.extra = found;
+  return found;
+}
+
+
+
+//詳細画面
+function openFlDetail(p) {
+  flDetail = p;
+  document.getElementById("label-fl-detail").textContent = p.name;
+  var size = getSkewbCanvasSize(FL_DETAIL_FIGURE_WIDTH);
+  document.getElementById("fl-detail").innerHTML =
+      '<div class="alg-state">'
+    +   '<div class="alg-figure"><canvas class="alg-canvas" width="' + size.width + '" height="' + size.height + '"></canvas></div>'
+    +   '<div class="alg-state-info"><div class="alg-setup-text">セットアップ: ' + escapeHtml(p.setup) + '</div></div>'
+    + '</div>'
+    + '<table class="fl-table"><thead><tr>' + flHeadHtml(p) + '</tr></thead>'
+    +   '<tbody id="fl-detail-body"><tr><td colspan="2" class="fl-none">計算中…</td></tr></tbody></table>';
+  DrawSkewbColors(FL_DETAIL_FIGURE_WIDTH, document.querySelector("#fl-detail .alg-canvas"), getFlPatternColors(p), FL_PALETTE);
+  $('#modal-fl-detail').modal('show');
+
+  //画面を出してから計算する
+  setTimeout(function () {
+    if (flDetail !== p) return;
+    findFlLongAlgs(p, 0);
+    findFlLongAlgs(p, 1);
+    renderFlDetailBody();
+  }, 30);
+}
+
+//詳細画面の手順（5手以下 ＋ 6手・7手、すべてにお気に入りのチェック）
+function renderFlDetailBody() {
+  var p = flDetail;
+  document.getElementById("fl-detail-body").innerHTML = '<tr>' + [0, 1].map(function (col) {
+    var codes = p.cols[col].algs.concat(p.cols[col].extra || []);
+    return '<td>' + flAlgListHtml(sortFlAlgs(p, col, codes), col, true) + '</td>';
+  }).join("") + '</tr>';
+}
+
+//お気に入りのチェック（詳細画面）
+document.getElementById("fl-detail").addEventListener("change", function (e) {
+  var cb = e.target;
+  if (!cb.classList.contains("fl-fav") || flDetail === null) return;
+  var p = flDetail;
+  var key = flFavKey(p, Number(cb.dataset.col), cb.dataset.code);
+  if (cb.checked) flFavorites[key] = true;
+  else delete flFavorites[key];
+  saveFlFavorites();
+
+  renderFlDetailBody();
+  //一覧の同じパターンも書き直す
+  if (p.group === flGroup) {
+    var caseEl = document.querySelector('#fl-list .fl-case[data-index="' + p.index + '"]');
+    if (caseEl !== null) caseEl.querySelector(".fl-table tbody").innerHTML = flTableBodyHtml(p);
+  }
+});
